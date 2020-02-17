@@ -50,7 +50,7 @@ def linreg(X, W, b):
     :param b:偏置向量（lables_num)；
     :return:输出矩阵(batch_size, labels_num)；
     """
-    return X.mm(X)+b
+    return X.mm(W)+b
 
 
 def softmax(X):
@@ -114,6 +114,16 @@ def cross_entropy(y_hat, y):
     return - torch.log(y_hat.gather(1, y.view(-1, 1)))
 
 
+def l2_penalty(w):
+    """
+    计算模型的l2惩罚项。
+
+    :param w:模型的权重；
+    :return: 模型的L2惩罚项，tensor.shape=(1,)；
+    """
+    return (w**2).sum() / 2
+
+
 def accuracy(y_hat, y):
     """
     求预测概的准确率(TP+TN)/(TP+TN+FP+FN)。
@@ -127,7 +137,7 @@ def accuracy(y_hat, y):
 
 def evaluate_accuracy(dataiter, net):
     """
-    求模型在数据集上的准确率指标。
+    求模型在数据集上的准确率指标，评估时不遗忘。
 
     :param dataiter: 数据集迭代器（features, labels)
     :param net: 模型。
@@ -135,7 +145,15 @@ def evaluate_accuracy(dataiter, net):
     """
     acc_sum, n = 0.0, 0
     for X, y in dataiter:
-        acc_sum += (net(X).argmax(dim=1) == y).float().sum().item()
+        if isinstance(net, torch.nn.Module):
+            net.eval()
+            acc_sum += (net(X).argmax(dim=1) == y).float().sum().item()
+            net.train()
+        else:
+            if ("is_training" in net.__code__.co_varnames):
+                acc_sum += (net(X, is_training=False).argmax(dim=1) == y).float().sum().item()
+            else:
+                acc_sum += (net(X).argmax(dim=1) == y).float().sum().item()
         n += y.shape[0]
     return acc_sum / n
 
@@ -178,15 +196,15 @@ def train_ch3(net, train_iter, test_iter, loss, num_epochs, batch_size,
 
             if optimizer is not None:
                 optimizer.zero_grad()
-            elif params is not None and params[0].grad.data is not None:
+            elif params is not None and params[0].grad is not None:
                 for param in params:
                     param.grad.data.zero_()
 
             l.backward()
-            if optimizer is None:
-                sgd(params, lr, batch_size)
-            else:
+            if optimizer is not None:
                 optimizer.step()
+            else:
+                sgd(params, lr, batch_size)
 
             train_l_sum += l.item()
             train_acc_sum += (y_hat.argmax(dim=1) == y).sum().item()
@@ -194,6 +212,21 @@ def train_ch3(net, train_iter, test_iter, loss, num_epochs, batch_size,
         test_acc = evaluate_accuracy(test_iter, net)
         print('epoch %d, loss %.4f, train acc %.3f, test acc %.3f'
               % (epoch + 1, train_l_sum / n, train_acc_sum / n, test_acc))
+
+
+def semilogy(x_vals, y_vals, x_label, y_label, x2_vals=None, y2_vals=None, legend=None, figsize=(3.5, 2.5)):
+    """
+    x_vals, y_vals, x_label, y_labe可迭代。
+    """
+    plt.rcParams["figure.figsize"] = figsize
+    plt.xlabel(x_label)
+    plt.ylabel(y_label)
+    plt.semilogy(x_vals, y_vals)
+    if x2_vals and y2_vals:
+        plt.semilogy(x2_vals, y2_vals, linestyle=':')
+        plt.legend(legend)
+
+
 
 
 from data import *
