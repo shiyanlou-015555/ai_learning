@@ -11,6 +11,8 @@ import numpy as np
 import random
 import matplotlib.pyplot as plt
 from IPython import display
+import re
+import zipfile
 
 
 mnist_train = torchvision.datasets.FashionMNIST(root='Datasets/FashionMNIST',
@@ -49,3 +51,31 @@ def show_fashion_mnist(images, labels):
         ax.axes.get_xaxis().set_visible(False)
         ax.axes.get_yaxis().set_visible(False)
     plt.show()
+
+
+def read_time_machine():
+    """
+    获取小说《timemachine》
+    :return: timechine各行文本组成的列表。
+    """
+    with open('Datasets/timemachine.txt', 'r') as f:
+        lines = [re.sub('[^a-z]+', ' ', line.strip().lower()) for line in f]
+    return lines
+
+
+def load_data_jay_lyrics():
+    """
+    获取周杰伦歌词数据集。
+
+    :return: corpus_indices, char_to_idx(字典), idx_to_char(列表), vocab_size
+    """
+    with zipfile.ZipFile('DataSets/jaychou_lyrics.txt.zip') as zin:
+        with zin.open('jaychou_lyrics.txt') as f:
+            corpus_chars = f.read().decode('utf-8')
+    corpus_chars = corpus_chars.replace('\n', ' ').replace('\r', ' ')
+    corpus_chars = corpus_chars[0:10000]
+    idx_to_char = list(set(corpus_chars))
+    char_to_idx = dict([(char, i) for i, char in enumerate(idx_to_char)])
+    vocab_size = len(char_to_idx)
+    corpus_indices = [char_to_idx[char] for char in corpus_chars]
+    return corpus_indices, char_to_idx, idx_to_char, vocab_size
