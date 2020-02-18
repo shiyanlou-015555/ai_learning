@@ -108,3 +108,17 @@ def pool2d(X, pool_size, mode='max'):
     return Y
 
 
+class Flatten(torch.nn.Module):
+    """
+    把高维特征展平成一维特征。
+    """
+    def forward(self, x):
+        return x.view(x.shape[0], -1)
+
+
+class Reshape(torch.nn.Module):
+    """
+    规范LeNet的输入特征为1x28x28。
+    """
+    def forward(self, x):
+        return x.view(-1,1,28,28)
