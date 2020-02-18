@@ -99,7 +99,7 @@ def data_iter_random(corpus_indices, batch_size, num_steps, device=None):
     def _data(i):
         return corpus_indices[i: i + num_steps]
 
-    for i in range(0, num_examples, batch_size):
+    for i in range(0, num_examples // batch_size * batch_size, batch_size):
         batch_indices = example_indices[i: i + batch_size]
         X = [_data(j) for j in batch_indices]
         Y = [_data(j + 1) for j in batch_indices]
