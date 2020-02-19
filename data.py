@@ -14,6 +14,7 @@ from IPython import display
 import re
 import zipfile
 
+import nlp
 
 mnist_train = torchvision.datasets.FashionMNIST(root='Datasets/FashionMNIST',
                                                 train=True,
@@ -79,3 +80,19 @@ def load_data_jay_lyrics():
     vocab_size = len(char_to_idx)
     corpus_indices = [char_to_idx[char] for char in corpus_chars]
     return corpus_indices, char_to_idx, idx_to_char, vocab_size
+
+
+def load_data_nmt(source, target, batch_size, max_len):
+    """
+    生成机器翻译字典的批量数据。
+    :param batch_size: 批量大小。
+    :param max_len: 句子长度上线。
+    :return: 迭代器
+    """
+    src_vocab, tgt_vocab = nlp.build_vocab(source), nlp.build_vocab(target)
+    src_array, src_valid_len = nlp.build_array(source, src_vocab, max_len, True)
+    tgt_array, tgt_valid_len = nlp.build_array(target, tgt_vocab, max_len, False)
+    train_data = data.TensorDataset(src_array, src_valid_len, tgt_array, tgt_valid_len)
+    train_iter = data.DataLoader(train_data, batch_size, shuffle=True)
+    return src_vocab, tgt_vocab, train_iter
+
