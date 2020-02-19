@@ -113,6 +113,11 @@ class Vocab_dict(object):
         else:
             return [self.__getitem__(item) for item in items]
 
+    def to_tokens(self, indices):
+        if not isinstance(indices, (list, tuple)):
+            return self.idx_to_token[indices]
+        return [self.idx_to_token[index] for index in indices]
+
 
 def build_vocab(tokens):
     """
