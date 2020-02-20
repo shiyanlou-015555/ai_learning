@@ -92,7 +92,7 @@ def load_data_nmt(source, target, batch_size, max_len):
     src_vocab, tgt_vocab = nlp.build_vocab(source), nlp.build_vocab(target)
     src_array, src_valid_len = nlp.build_array(source, src_vocab, max_len, True)
     tgt_array, tgt_valid_len = nlp.build_array(target, tgt_vocab, max_len, False)
-    train_data = data.TensorDataset(src_array, src_valid_len, tgt_array, tgt_valid_len)
-    train_iter = data.DataLoader(train_data, batch_size, shuffle=True)
+    train_data = torch.utils.data.TensorDataset(src_array, src_valid_len, tgt_array, tgt_valid_len)
+    train_iter = torch.utils.data.DataLoader(train_data, batch_size, shuffle=True)
     return src_vocab, tgt_vocab, train_iter
 
