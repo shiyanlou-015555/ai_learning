@@ -10,6 +10,7 @@ import torch.utils.data as data
 # print(torch.cuda.is_available())
 import numpy as np
 import random
+import time
 
 
 def try_gpu():
@@ -143,26 +144,32 @@ def accuracy(y_hat, y):
     return (y_hat.argmax(dim=1) == y).float().mean().item()
 
 
-def evaluate_accuracy(dataiter, net):
+def evaluate_accuracy(dataiter, net, device=None):
     """
     求模型在数据集上的准确率指标，评估时不遗忘。
 
     :param dataiter: 数据集迭代器（features, labels)
     :param net: 模型。
+    :param device: CPU/CUDA。
     :return: 准确度指标
     """
+    if device is None and isinstance(net, torch.nn.Module):
+        # 如果没指定device就使用net的device
+        device = list(net.parameters())[0].device
     acc_sum, n = 0.0, 0
-    for X, y in dataiter:
-        if isinstance(net, torch.nn.Module):
-            net.eval()
-            acc_sum += (net(X).argmax(dim=1) == y).float().sum().item()
-            net.train()
-        else:
-            if ("is_training" in net.__code__.co_varnames):
-                acc_sum += (net(X, is_training=False).argmax(dim=1) == y).float().sum().item()
-            else:
+    with torch.no_grad():
+        # 模型预测模式不需要反向传播。
+        for X, y in dataiter:
+            if isinstance(net, torch.nn.Module):
+                net.eval()
                 acc_sum += (net(X).argmax(dim=1) == y).float().sum().item()
-        n += y.shape[0]
+                net.train()
+            else:
+                if ("is_training" in net.__code__.co_varnames):
+                    acc_sum += (net(X, is_training=False).argmax(dim=1) == y).float().sum().cpu().item()
+                else:
+                    acc_sum += (net(X).argmax(dim=1) == y).float().sum().item()
+            n += y.shape[0]
     return acc_sum / n
 
 
@@ -220,6 +227,41 @@ def train_ch3(net, train_iter, test_iter, loss, num_epochs, batch_size,
         test_acc = evaluate_accuracy(test_iter, net)
         print('epoch %d, loss %.4f, train acc %.3f, test acc %.3f'
               % (epoch + 1, train_l_sum / n, train_acc_sum / n, test_acc))
+
+
+def train_ch5(net, train_iter, test_iter, batch_size, optimizer, device, num_epochs):
+    """
+    训练深度学习分类模型，损失函数为交叉熵函数。
+
+    :param net: 模型。
+    :param train_iter: 训练数据集迭代器（features, labels）。
+    :param test_iter: 测试数据集迭代器（features, labels）。
+    :param batch_size: 批量大小。
+    :param optimizer: 优化器。
+    :param device: CPU/CUDA。
+    :param num_epochs: 训练周期。
+    :return: None。
+    """
+    net = net.to(device)
+    print("training on ", device)
+    loss = torch.nn.CrossEntropyLoss()
+    for epoch in range(num_epochs):
+        train_l_sum, train_acc_sum, n, batch_count, start = 0.0, 0.0, 0, 0, time.time()
+        for X, y in train_iter:
+            X = X.to(device)
+            y = y.to(device)
+            y_hat = net(X)
+            l = loss(y_hat, y)
+            optimizer.zero_grad()
+            l.backward()
+            optimizer.step()
+            train_l_sum += l.cpu().item()
+            train_acc_sum += (y_hat.argmax(dim=1) == y).sum().cpu().item()
+            n += y.shape[0]
+            batch_count += 1
+        test_acc = evaluate_accuracy(test_iter, net)
+        print('epoch %d, loss %.4f, train acc %.3f, test acc %.3f, time %.1f sec'
+              % (epoch + 1, train_l_sum / batch_count, train_acc_sum / n, test_acc, time.time() - start))
 
 
 def semilogy(x_vals, y_vals, x_label, y_label, x2_vals=None, y2_vals=None, legend=None, figsize=(3.5, 2.5)):
