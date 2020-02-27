@@ -2,3 +2,4 @@
 Datasets/FashionMNIST/
 .idea/
 __pycache__/
+.data/
