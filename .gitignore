@@ -1,5 +1,9 @@
 .ipynb_checkpoints/
 Datasets/FashionMNIST/
+Datasets/aclImdb/
+Datasets/aclImdb_v1.tar.gz
+Datasets/glove/
 .idea/
 __pycache__/
 .data/
+log/
