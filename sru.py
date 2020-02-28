@@ -87,7 +87,7 @@ def gru(inputs, state, params):
 
 
 pred_period, pred_len, prefixes = 40, 50, ['分开', '不分开']
-num_epochs, num_steps, batch_size, lr, clipping_theta = 160, 35, 32, 1e2, 1e-2
+num_epochs, num_steps, batch_size, lr, clipping_theta = 400, 35, 32, 1e2, 1e-2
 
 print("="*40)
 print("using sru")
