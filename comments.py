@@ -96,7 +96,7 @@ def train_classify(net, vocab, train_iter, test_iter, batch_size, LR=0.01, num_e
         train_l_sum, n, start = 0.0, 1, time.time()
 
         for step, (X, Y) in enumerate(train_iter):  # gives batch data
-            print("\b"*4,step,end="")
+            print("\b"*20, step, end="")
             X = vocab.onehot_sentences(X)
             Y = torch.from_numpy(Y).long()
             output = rnn(X)  # rnn output
@@ -108,7 +108,7 @@ def train_classify(net, vocab, train_iter, test_iter, batch_size, LR=0.01, num_e
             train_l_sum += loss.cpu().item()
             n += Y.shape[0]
 
-        if (epoch+1)%10 == 0:
+        # if (epoch+1)%10 == 0:
             print('epoch %d, losses %.4f, auc %f, time %.2f sec' % (
                 epoch+1, train_l_sum/n, roc_auc_score(Y.numpy(), Y_hat.numpy()), time.time()-start))
 
@@ -126,5 +126,5 @@ if __name__=="__main__":
     rnn = RNN(input_size=len(vocab))
     train_iter = data_iter(32, train_X, train_Y)
     test_iter = data_iter(32, test_X, test_Y)
-    train_classify(rnn, vocab, train_iter, test_iter, 50, LR=0.01, num_epochs=250)
+    train_classify(rnn, vocab, train_iter, test_iter, 256, LR=0.01, num_epochs=250)
 
