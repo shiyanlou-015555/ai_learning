@@ -246,10 +246,12 @@ if __name__=="__main__":
         print("=" * 20, "num_layer = ", num_layer, "=" * 20)
         rnn_layer = torch.nn.RNN(input_size=vocab_size, hidden_size=256, num_layers=num_layer, bidirectional=False)
         model = RNNModel(rnn_layer).to(device)
-        train_and_predict_rnn(model, corpus_indices, idx_to_char, char_to_idx,
-                              num_steps, batch_size,
-                              num_epochs, lr, clipping_theta,
-                              pred_period, pred_len, prefixes, device)
+        epoch_perplexity, epoch_time =  train_and_predict_rnn(model, corpus_indices, idx_to_char, char_to_idx,
+                                                              num_steps, batch_size,
+                                                              num_epochs, lr, clipping_theta,
+                                                              pred_period, pred_len, prefixes, device)
+        perplexity.append(epoch_perplexity)
+        trainTime.append(epoch_time)
     plot_perplexity_and_time(perplexity, trainTime, ["num_layers=" + str(i) for i in num_layers_seq], "RNN - num_layers")
 
 
@@ -263,10 +265,12 @@ if __name__=="__main__":
         print("=" * 20, "num_hiddens = ", num_hiddens, "=" * 20)
         rnn_layer = torch.nn.GRU(input_size=vocab_size, hidden_size=num_hiddens, num_layers=1, bidirectional=False)
         model = RNNModel(rnn_layer).to(device)
-        train_and_predict_rnn(model, corpus_indices, idx_to_char, char_to_idx,
-                              num_steps, batch_size,
-                              num_epochs, lr, clipping_theta,
-                              pred_period, pred_len, prefixes, device)
+        epoch_perplexity, epoch_time = train_and_predict_rnn(model, corpus_indices, idx_to_char, char_to_idx,
+                                                             num_steps, batch_size,
+                                                             num_epochs, lr, clipping_theta,
+                                                             pred_period, pred_len, prefixes, device)
+        perplexity.append(epoch_perplexity)
+        trainTime.append(epoch_time)
     plot_perplexity_and_time(perplexity, trainTime, ["hidden_size="+str(i) for i in hidden_size_seq], "GRU - num_hiddens")
 
 
@@ -281,10 +285,12 @@ if __name__=="__main__":
         rnn_layer = torch.nn.GRU(input_size=vocab_size, hidden_size=256, num_layers=num_layer,
                                  bidirectional=False)
         model = RNNModel(rnn_layer).to(device)
-        train_and_predict_rnn(model, corpus_indices, idx_to_char, char_to_idx,
-                              num_steps, batch_size,
-                              num_epochs, lr, clipping_theta,
-                              pred_period, pred_len, prefixes, device)
+        epoch_perplexity, epoch_time =  train_and_predict_rnn(model, corpus_indices, idx_to_char, char_to_idx,
+                                                              num_steps, batch_size,
+                                                              num_epochs, lr, clipping_theta,
+                                                              pred_period, pred_len, prefixes, device)
+        perplexity.append(epoch_perplexity)
+        trainTime.append(epoch_time)
     plot_perplexity_and_time(perplexity, trainTime, ["num_layers=" + str(i) for i in num_layers_seq], "GRU - num_layers")
 
 
@@ -298,10 +304,12 @@ if __name__=="__main__":
         print("=" * 20, "num_hiddens = ", num_hiddens, "=" * 20)
         rnn_layer = torch.nn.LSTM(input_size=vocab_size, hidden_size=num_hiddens, num_layers=1, bidirectional=False)
         model = RNNModel(rnn_layer).to(device)
-        train_and_predict_rnn(model, corpus_indices, idx_to_char, char_to_idx,
-                              num_steps, batch_size,
-                              num_epochs, lr, clipping_theta,
-                              pred_period, pred_len, prefixes, device)
+        epoch_perplexity, epoch_time = train_and_predict_rnn(model, corpus_indices, idx_to_char, char_to_idx,
+                                                             num_steps, batch_size,
+                                                             num_epochs, lr, clipping_theta,
+                                                             pred_period, pred_len, prefixes, device)
+        perplexity.append(epoch_perplexity)
+        trainTime.append(epoch_time)
     plot_perplexity_and_time(perplexity, trainTime, ["hidden_size=" + str(i) for i in hidden_size_seq], "LSTM - num_hiddens")
 
 
@@ -316,8 +324,10 @@ if __name__=="__main__":
         rnn_layer = torch.nn.LSTM(input_size=vocab_size, hidden_size=256, num_layers=num_layer,
                                  bidirectional=False)
         model = RNNModel(rnn_layer).to(device)
-        train_and_predict_rnn(model, corpus_indices, idx_to_char, char_to_idx,
-                              num_steps, batch_size,
-                              num_epochs, lr, clipping_theta,
-                              pred_period, pred_len, prefixes, device)
+        epoch_perplexity, epoch_time = train_and_predict_rnn(model, corpus_indices, idx_to_char, char_to_idx,
+                                                             num_steps, batch_size,
+                                                             num_epochs, lr, clipping_theta,
+                                                             pred_period, pred_len, prefixes, device)
+        perplexity.append(epoch_perplexity)
+        trainTime.append(epoch_time)
     plot_perplexity_and_time(perplexity, trainTime, ["num_layers=" + str(i) for i in num_layers_seq], "LSTM - num_layers")
