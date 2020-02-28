@@ -150,6 +150,8 @@ def train_and_predict_rnn(model, corpus_indices, idx_to_char, char_to_idx,
         data_iter = data_iter_consecutive(corpus_indices, batch_size, num_steps, device)  # 相邻采样
         state = None
         for X, Y in data_iter:
+            X = X.to(device)
+            Y = Y.to(device)
             if state is not None:
                 # 相邻采样使用detach函数从计算图分离隐藏状态
                 if isinstance(state, tuple):
@@ -158,7 +160,7 @@ def train_and_predict_rnn(model, corpus_indices, idx_to_char, char_to_idx,
                 else:
                     state.detach_()
             (output, state) = model(X, state)  # output.shape: (num_steps * batch_size, vocab_size)
-            y = torch.flatten(Y.T)             # Y.shape:      (batch_size, num_steps)
+            y = torch.flatten(Y.T).to(device)             # Y.shape:      (batch_size, num_steps)
             l = loss(output, y.long())         # y.shape:      (num_steps * batch_size, 1)
 
             optimizer.zero_grad()
@@ -179,21 +181,21 @@ def train_and_predict_rnn(model, corpus_indices, idx_to_char, char_to_idx,
     return epoch_perplexity, epoch_time
 
 
-def plot_perplexity_and_time(perplexity, trainTime, legends, title):
+def plot_perplexities_and_times(perplexities, trainTimes, legends, title):
     """
     superPameters, batch, metics
     """
     plt.figure(figsize=(12,6))
     plt.subplot(121)
-    for batch_perplexity in perplexity:
-        plt.plot(range(1,len(batch_perplexity)+1), batch_perplexity)
+    for perplexity in perplexities:
+        plt.plot(range(1,len(perplexity)+1), perplexity)
     plt.legend(legends)
     plt.xlabel("batch")
     plt.ylabel("perplexity")
     plt.title(title)
     plt.subplot(122)
-    for batch_trainTime in trainTime:
-        plt.plot(range(1,len(batch_trainTime)+1), batch_trainTime)
+    for trainTime in trainTimes:
+        plt.plot(range(1,len(trainTime)+1), trainTime)
     plt.legend(legends)
     plt.xlabel("batch")
     plt.ylabel("trainTime")
@@ -201,6 +203,21 @@ def plot_perplexity_and_time(perplexity, trainTime, legends, title):
     plt.savefig(os.path.join("log", title+".png"))
     plt.close()
 
+def plot_perplexities_and_times(perplexity, trainTime, title):
+    plt.figure(figsize=(8, 6))
+    plt.plot(range(1, len(perplexity) + 1), perplexity)
+    plt.xlabel("batch")
+    plt.ylabel("perplexity")
+    plt.title(title)
+    plt.savefig(os.path.join("log", title + "-perplexity.png"))
+    plt.close()
+    plt.figure(figsize=(8, 6))
+    plt.plot(range(1, len(trainTime) + 1), trainTime)
+    plt.xlabel("batch")
+    plt.ylabel("trainTime")
+    plt.title(title)
+    plt.savefig(os.path.join("log", title + "-trainTime.png"))
+    plt.close()
 
 if __name__=="__main__":
     num_steps, batch_size = 35, 32
@@ -219,17 +236,20 @@ if __name__=="__main__":
         for num_hiddens in num_hiddens_set:
             for num_layers in num_layers_set:
                 for bidrectional in bidrectional_set:
-                    print(f"net={net}, num_hiddens={num_hiddens}, num_layers{num_layers}, bidrectional={bidrectional}")
+                    title = f"net={net}, num_hiddens={num_hiddens}, num_layers{num_layers}, bidrectional={bidrectional}"
+                    print(title)
                     rnn_layer = net_dict[net](input_size=vocab_size, hidden_size=num_hiddens, num_layers=1, bidirectional=False)
                     model = RNNModel(rnn_layer).to(device)
                     epoch_perplexity, epoch_time = train_and_predict_rnn(model, corpus_indices, idx_to_char, char_to_idx,
                                                                          num_steps, batch_size,
                                                                          num_epochs, lr, clipping_theta,
                                                                          pred_period, pred_len, prefixes, device)
+                    plot_perplexities_and_times(epoch_perplexity, epoch_time, title)
                     for b in batch_size_set:
                         experimental.loc[(net,num_hiddens,num_layers, bidrectional, b)]["perplexity"] = epoch_perplexity[b-1]
                         experimental.loc[net,num_hiddens,num_layers, bidrectional, b]["trainTime"] = epoch_time[b-1]
     experimental.to_csv("openwork_log.csv")
+
     # RNN - bidirectional效果不好
     # num_hiddens = 256
     # rnn_layer = torch.nn.RNN(input_size=vocab_size, hidden_size=num_hiddens, num_layers=2, bidirectional=True)
@@ -257,7 +277,7 @@ if __name__=="__main__":
     #                                                          pred_period, pred_len, prefixes, device)
     #     perplexity.append(epoch_perplexity)
     #     trainTime.append(epoch_time)
-    # plot_perplexity_and_time(perplexity, trainTime, ["hidden_size="+str(i) for i in hidden_size_seq], "RNN - num_hiddens")
+    # plot_perplexities_and_times(perplexity, trainTime, ["hidden_size="+str(i) for i in hidden_size_seq], "RNN - num_hiddens")
 
 
     # # RNN - num_layers
@@ -276,7 +296,7 @@ if __name__=="__main__":
     #                                                           pred_period, pred_len, prefixes, device)
     #     perplexity.append(epoch_perplexity)
     #     trainTime.append(epoch_time)
-    # plot_perplexity_and_time(perplexity, trainTime, ["num_layers=" + str(i) for i in num_layers_seq], "RNN - num_layers")
+    # plot_perplexities_and_times(perplexity, trainTime, ["num_layers=" + str(i) for i in num_layers_seq], "RNN - num_layers")
 
 
     # # GRU - num_hiddens
@@ -295,7 +315,7 @@ if __name__=="__main__":
     #                                                          pred_period, pred_len, prefixes, device)
     #     perplexity.append(epoch_perplexity)
     #     trainTime.append(epoch_time)
-    # plot_perplexity_and_time(perplexity, trainTime, ["hidden_size="+str(i) for i in hidden_size_seq], "GRU - num_hiddens")
+    # plot_perplexities_and_times(perplexity, trainTime, ["hidden_size="+str(i) for i in hidden_size_seq], "GRU - num_hiddens")
 
 
     # # GRU - num_layers
@@ -315,7 +335,7 @@ if __name__=="__main__":
     #                                                           pred_period, pred_len, prefixes, device)
     #     perplexity.append(epoch_perplexity)
     #     trainTime.append(epoch_time)
-    # plot_perplexity_and_time(perplexity, trainTime, ["num_layers=" + str(i) for i in num_layers_seq], "GRU - num_layers")
+    # plot_perplexities_and_times(perplexity, trainTime, ["num_layers=" + str(i) for i in num_layers_seq], "GRU - num_layers")
 
 
     # # LSTM - num_hiddens
@@ -334,7 +354,7 @@ if __name__=="__main__":
     #                                                          pred_period, pred_len, prefixes, device)
     #     perplexity.append(epoch_perplexity)
     #     trainTime.append(epoch_time)
-    # plot_perplexity_and_time(perplexity, trainTime, ["hidden_size=" + str(i) for i in hidden_size_seq], "LSTM - num_hiddens")
+    # plot_perplexities_and_times(perplexity, trainTime, ["hidden_size=" + str(i) for i in hidden_size_seq], "LSTM - num_hiddens")
     #
     #
     # # LSTM - num_layers
@@ -354,4 +374,4 @@ if __name__=="__main__":
     #                                                          pred_period, pred_len, prefixes, device)
     #     perplexity.append(epoch_perplexity)
     #     trainTime.append(epoch_time)
-    # plot_perplexity_and_time(perplexity, trainTime, ["num_layers=" + str(i) for i in num_layers_seq], "LSTM - num_layers")
+    # plot_perplexities_and_times(perplexity, trainTime, ["num_layers=" + str(i) for i in num_layers_seq], "LSTM - num_layers")
