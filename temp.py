@@ -184,3 +184,4 @@ def predict_sentiment(net, vocab, sentence):
     return 'positive' if label.item() == 1 else 'negative'
 
 predict_sentiment(net, vocab, ['this', 'movie', 'is', 'so', 'great'])
+predict_sentiment(net, vocab, ['this', 'movie', 'is', 'so', 'bad'])
