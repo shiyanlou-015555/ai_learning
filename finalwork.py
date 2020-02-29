@@ -12,6 +12,7 @@ import time
 from sklearn.metrics import roc_auc_score
 import numpy as np
 import pandas as pd
+import jieba
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -27,10 +28,10 @@ def read_comments(fname):
     random.shuffle(data)
     return data
 all_data = read_comments("Datasets/comments/train_shuffle.txt")
-train_data = all_data[:14000]
+train_data = all_data[:16000]
 valid_data = all_data[14000:]
 
-
+max_l = 19
 # 预处理数据
 def get_tokenized_comments(data):
     """
@@ -38,18 +39,20 @@ def get_tokenized_comments(data):
     """
     def tokenizer(text):
         return list(text)
+        # return jieba.lcut(text, cut_all=True)
     return [tokenizer(comment) for comment, _ in data]
+
 
 
 def get_vocab_comments(data):
     tokenized_data = get_tokenized_comments(data)
     counter = collections.Counter([tk for st in tokenized_data for tk in st])
-    return Vocab.Vocab(counter, min_freq=3)
+    return Vocab.Vocab(counter, min_freq=2)
 
 
 def preprocess_comments(data, vocab):
     """因为每条评论长度不一致所以不能直接组合成小批量，我们定义preprocess_imdb函数对每条评论进行分词，并通过词典转换成词索引，然后通过截断或者补0来将每条评论长度固定成15。"""
-    max_l = 15  # 将每条评论通过截断或者补0，使得长度变成500
+      # 将每条评论通过截断或者补0，使得长度变成500
     def pad(x):
         return x[:max_l] if len(x) > max_l else x + [0] * (max_l - len(x))
     tokenized_data = get_tokenized_comments(data)
@@ -84,7 +87,7 @@ class BiRNN(torch.nn.Module):
                                num_layers=num_layers,
                                bidirectional=True)
         # 初始时间步和最终时间步的隐藏状态作为全连接层输入
-        self.dropout = nn.Dropout(p=0.2)
+        self.dropout = nn.Dropout(p=0.1)
         self.decoder = nn.Linear(4*num_hiddens, 2)
 
     def forward(self, inputs):
@@ -101,8 +104,10 @@ class BiRNN(torch.nn.Module):
         outs = self.decoder(dropout)
         return outs
 
-
-embed_size, num_hiddens, num_layers = 25, 40, 3
+# 字符向量
+embed_size, num_hiddens, num_layers = 30, 44, 2
+# 结巴分词
+# embed_size, num_hiddens, num_layers = 50, 50, 3
 net = BiRNN(vocab, embed_size, num_hiddens, num_layers)
 
 
@@ -191,15 +196,14 @@ def predict_sentiment(net, vocab, sentence):
     label = torch.argmax(net(sentence.view((1, -1))), dim=1)
     return label.item()
 
-predict_sentiment(net, vocab, list('鱼烧的恰到好处')) #
-predict_sentiment(net, vocab, list('团购很合适'))     #
+predict_sentiment(net, vocab, list('鱼烧的恰到好处')) #1
+predict_sentiment(net, vocab, list('团购很合适'))     #0
 
 
 # 输出结果
 lines =  open("Datasets/comments/test_handout.txt", encoding="utf-8").readlines()
 def preprocess_comments2(data, vocab):
     """因为每条评论长度不一致所以不能直接组合成小批量，我们定义preprocess_imdb函数对每条评论进行分词，并通过词典转换成词索引，然后通过截断或者补0来将每条评论长度固定成10。"""
-    max_l = 10  # 将每条评论通过截断或者补0，使得长度变成500
     def pad(x):
         return x[:max_l] if len(x) > max_l else x + [0] * (max_l - len(x))
     tokenized_data = [list(line.strip()) for line in data]
