@@ -28,6 +28,7 @@ def read_comments(fname):
     random.shuffle(data)
     return data
 all_data = read_comments("Datasets/comments/train_shuffle.txt")
+# 提交的时候用全部数据训练，调参的时候要切分训练集和预测集
 train_data = all_data[:16000]
 valid_data = all_data[14000:]
 
