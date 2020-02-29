@@ -3,70 +3,69 @@
 import collections
 import os
 import random
-import tarfile
 import torch
 from torch import nn
 import torchtext.vocab as Vocab
 import torch.utils.data as Data
 from tqdm import tqdm
 import time
+from sklearn.metrics import roc_auc_score
+import numpy as np
+import pandas as pd
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-DATA_ROOT = "Datasets"
-fname = os.path.join(DATA_ROOT, "aclImdb_v1.tar.gz")
-if not os.path.exists(os.path.join(DATA_ROOT, "aclImdb")):
-    print("从压缩包解压...")
-    with tarfile.open(fname, 'r') as f:
-        f.extractall(DATA_ROOT)
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
 # 读取数据
-def read_imdb(folder='train', data_root="Datasets/aclImdb"):
+def read_comments(fname):
     data = []
-    for label in ['pos', 'neg']:
-        folder_name = os.path.join(data_root, folder, label)
-        for file in tqdm(os.listdir(folder_name)):
-            with open(os.path.join(folder_name, file), 'rb') as f:
-                review = f.read().decode('utf-8').replace('\n', '').lower()
-                data.append([review, 1 if label == 'pos' else 0])
+    with open(fname, encoding="utf-8") as f:
+        for line in f:
+            label, comment = line.split()
+            data.append([comment, int(label)])
     random.shuffle(data)
     return data
-train_data, test_data = read_imdb('train'), read_imdb('test')
+all_data = read_comments("Datasets/comments/train_shuffle.txt")
+train_data = all_data[:14000]
+valid_data = all_data[14000:]
 
 
 # 预处理数据
-def get_tokenized_imdb(data):
+def get_tokenized_comments(data):
     """
     data: list of [string, label]
     """
     def tokenizer(text):
-        return [tok.lower() for tok in text.split(' ')]
-    return [tokenizer(review) for review, _ in data]
+        return list(text)
+    return [tokenizer(comment) for comment, _ in data]
 
-def get_vocab_imdb(data):
-    tokenized_data = get_tokenized_imdb(data)
+
+def get_vocab_comments(data):
+    tokenized_data = get_tokenized_comments(data)
     counter = collections.Counter([tk for st in tokenized_data for tk in st])
-    return Vocab.Vocab(counter, min_freq=5)
-
-vocab = get_vocab_imdb(train_data)
+    return Vocab.Vocab(counter, min_freq=3)
 
 
-def preprocess_imdb(data, vocab):
-    """因为每条评论长度不一致所以不能直接组合成小批量，我们定义preprocess_imdb函数对每条评论进行分词，并通过词典转换成词索引，然后通过截断或者补0来将每条评论长度固定成500。"""
-    max_l = 500  # 将每条评论通过截断或者补0，使得长度变成500
+def preprocess_comments(data, vocab):
+    """因为每条评论长度不一致所以不能直接组合成小批量，我们定义preprocess_imdb函数对每条评论进行分词，并通过词典转换成词索引，然后通过截断或者补0来将每条评论长度固定成15。"""
+    max_l = 15  # 将每条评论通过截断或者补0，使得长度变成500
     def pad(x):
         return x[:max_l] if len(x) > max_l else x + [0] * (max_l - len(x))
-    tokenized_data = get_tokenized_imdb(data)
+    tokenized_data = get_tokenized_comments(data)
     features = torch.tensor([pad([vocab.stoi[word] for word in words]) for words in tokenized_data])
     labels = torch.tensor([score for _, score in data])
     return features, labels
 
 
-batch_size = 64
-train_set = Data.TensorDataset(*preprocess_imdb(train_data, vocab))
-test_set = Data.TensorDataset(*preprocess_imdb(test_data, vocab))
+# 创建数据集
+vocab = get_vocab_comments(train_data)
+print(len(vocab))
+batch_size = 32
+train_set = Data.TensorDataset(*preprocess_comments(train_data, vocab))
+valid_set = Data.TensorDataset(*preprocess_comments(valid_data, vocab))
 train_iter = Data.DataLoader(train_set, batch_size, shuffle=True)
-test_iter = Data.DataLoader(test_set, batch_size)
+valid_iter = Data.DataLoader(valid_set, batch_size)
 
 for X, y in train_iter:
     print('X', X.shape, 'y', y.shape)
@@ -75,7 +74,7 @@ for X, y in train_iter:
 
 
 # RNN
-class BiRNN(nn.Module):
+class BiRNN(torch.nn.Module):
     def __init__(self, vocab, embed_size, num_hiddens, num_layers):
         super(BiRNN, self).__init__()
         self.embedding = nn.Embedding(len(vocab), embed_size)
@@ -85,6 +84,7 @@ class BiRNN(nn.Module):
                                num_layers=num_layers,
                                bidirectional=True)
         # 初始时间步和最终时间步的隐藏状态作为全连接层输入
+        self.dropout = nn.Dropout(p=0.2)
         self.decoder = nn.Linear(4*num_hiddens, 2)
 
     def forward(self, inputs):
@@ -97,34 +97,16 @@ class BiRNN(nn.Module):
         # 连结初始时间步和最终时间步的隐藏状态作为全连接层输入。它的形状为
         # (批量大小, 4 * 隐藏单元个数)。
         encoding = torch.cat((outputs[0], outputs[-1]), -1)
-        outs = self.decoder(encoding)
+        dropout = self.dropout(encoding)
+        outs = self.decoder(dropout)
         return outs
 
 
-embed_size, num_hiddens, num_layers = 100, 100, 2
+embed_size, num_hiddens, num_layers = 25, 40, 3
 net = BiRNN(vocab, embed_size, num_hiddens, num_layers)
 
-# 预训练的词向量
-glove_vocab = Vocab.GloVe(name='6B', dim=100, cache=os.path.join(DATA_ROOT, "glove"))
-def load_pretrained_embedding(words, pretrained_vocab):
-    """从预训练好的vocab中提取出words对应的词向量"""
-    embed = torch.zeros(len(words), pretrained_vocab.vectors[0].shape[0]) # 初始化为0
-    oov_count = 0 # out of vocabulary
-    for i, word in enumerate(words):
-        try:
-            idx = pretrained_vocab.stoi[word]
-            embed[i, :] = pretrained_vocab.vectors[idx]
-        except KeyError:
-            oov_count += 1
-    if oov_count > 0:
-        print("There are %d oov words." % oov_count)
-    return embed
 
-net.embedding.weight.data.copy_(load_pretrained_embedding(vocab.itos, glove_vocab))
-net.embedding.weight.requires_grad = False # 直接加载预训练好的, 所以不需要更新它
-
-
-# 评价指标
+# 准确度评价指标
 def evaluate_accuracy(data_iter, net, device=None):
     if device is None and isinstance(net, torch.nn.Module):
         # 如果没指定device就使用net的device
@@ -146,6 +128,30 @@ def evaluate_accuracy(data_iter, net, device=None):
     return acc_sum / n
 
 
+def evaluate_auc(data_iter, net, device=None):
+    def softmax(X):
+        """
+        转换后，任意一行元素代表了一个样本在各个输出类别上的预测概率，概率之和为1。
+
+        :param X:特征强度矩阵（batch_size, features_num）；
+        :return:特赠概率矩阵（batch_size, features_num）；
+        """
+        X_exp = X.exp()
+        partition = X_exp.sum(dim=1, keepdim=True)
+        return X_exp / partition
+    if device is None:
+        device = list(net.parameters())[0].device
+    y_true, y_hat = np.zeros(0), np.zeros(0)
+    with torch.no_grad():
+        for X, y in data_iter:
+            net.eval() # 评估模式, 这会关闭dropout
+            y_hat = np.concatenate([y_hat, softmax(net(X.to(device)).detach().cpu())[:,1].numpy()])
+            y_true = np.concatenate([y_true, y.cpu().numpy()])
+            net.train() # 改回训练模式
+    return roc_auc_score(y_true, y_hat), y_hat
+
+
+# 训练函数
 def train(train_iter, test_iter, net, loss, optimizer, device, num_epochs):
     net = net.to(device)
     print("training on ", device)
@@ -164,23 +170,47 @@ def train(train_iter, test_iter, net, loss, optimizer, device, num_epochs):
             train_acc_sum += (y_hat.argmax(dim=1) == y).sum().cpu().item()
             n += y.shape[0]
             batch_count += 1
+        train_auc, _ = evaluate_auc(train_iter, net)
         test_acc = evaluate_accuracy(test_iter, net)
-        print('epoch %d, loss %.4f, train acc %.3f, test acc %.3f, time %.1f sec'
-              % (epoch + 1, train_l_sum / batch_count, train_acc_sum / n, test_acc, time.time() - start))
+        test_auc, _ = evaluate_auc(test_iter, net)
+        print('epoch %d, loss %.4f, train acc %.3f, test acc %.3f, train auc %.3f, test auc %.3f, time %.1f sec'
+              % (epoch + 1, train_l_sum / batch_count, train_acc_sum / n, test_acc, train_auc, test_auc, time.time() - start))
 
 
-lr, num_epochs = 0.01, 5
-# 要过滤掉不计算梯度的embedding参数
-optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, net.parameters()), lr=lr)
+lr, num_epochs = 0.01, 3
+optimizer = torch.optim.Adam(net.parameters(), lr=lr)
 loss = nn.CrossEntropyLoss()
-train(train_iter, test_iter, net, loss, optimizer, device, num_epochs)
+train(train_iter, valid_iter, net, loss, optimizer, device, num_epochs)
 
+
+# 预测函数
 def predict_sentiment(net, vocab, sentence):
     """sentence是词语的列表"""
     device = list(net.parameters())[0].device
     sentence = torch.tensor([vocab.stoi[word] for word in sentence], device=device)
     label = torch.argmax(net(sentence.view((1, -1))), dim=1)
-    return 'positive' if label.item() == 1 else 'negative'
+    return label.item()
 
-predict_sentiment(net, vocab, ['this', 'movie', 'is', 'so', 'great'])
-predict_sentiment(net, vocab, ['this', 'movie', 'is', 'so', 'bad'])
+predict_sentiment(net, vocab, list('鱼烧的恰到好处')) #
+predict_sentiment(net, vocab, list('团购很合适'))     #
+
+
+# 输出结果
+lines =  open("Datasets/comments/test_handout.txt", encoding="utf-8").readlines()
+def preprocess_comments2(data, vocab):
+    """因为每条评论长度不一致所以不能直接组合成小批量，我们定义preprocess_imdb函数对每条评论进行分词，并通过词典转换成词索引，然后通过截断或者补0来将每条评论长度固定成10。"""
+    max_l = 10  # 将每条评论通过截断或者补0，使得长度变成500
+    def pad(x):
+        return x[:max_l] if len(x) > max_l else x + [0] * (max_l - len(x))
+    tokenized_data = [list(line.strip()) for line in data]
+    features = torch.tensor([pad([vocab.stoi[word] for word in words]) for words in tokenized_data])
+    return features
+test_X = preprocess_comments2(lines, vocab)
+test_y = torch.nn.Sigmoid()(net(test_X.to(device))[:, 1]).detach().cpu().numpy()
+
+pd.DataFrame({"ID":range(0,len(test_y)),"Prediction":test_y}).to_csv("log/submission_random.csv", index=False)
+
+
+
+
+
