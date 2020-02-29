@@ -134,17 +134,13 @@ def evaluate_accuracy(data_iter, net, device=None):
     return acc_sum / n
 
 
-def evaluate_auc(data_iter, net, device=None):
-    def softmax(X):
-        """
-        转换后，任意一行元素代表了一个样本在各个输出类别上的预测概率，概率之和为1。
+def softmax(X):
+    X_exp = X.exp()
+    partition = X_exp.sum(dim=1, keepdim=True)
+    return X_exp / partition
 
-        :param X:特征强度矩阵（batch_size, features_num）；
-        :return:特赠概率矩阵（batch_size, features_num）；
-        """
-        X_exp = X.exp()
-        partition = X_exp.sum(dim=1, keepdim=True)
-        return X_exp / partition
+
+def evaluate_auc(data_iter, net, device=None):
     if device is None:
         device = list(net.parameters())[0].device
     y_true, y_hat = np.zeros(0), np.zeros(0)
@@ -211,8 +207,8 @@ def preprocess_comments2(data, vocab):
     features = torch.tensor([pad([vocab.stoi[word] for word in words]) for words in tokenized_data])
     return features
 test_X = preprocess_comments2(lines, vocab)
-test_y = torch.nn.Sigmoid()(net(test_X.to(device))[:, 1]).detach().cpu().numpy()
-
+# test_y = torch.nn.Sigmoid()(net(test_X.to(device))[:, 1]).detach().cpu().numpy()
+test_y = softmax(net(test_X.to(device))).detach().cpu()[:,1].numpy()
 pd.DataFrame({"ID":range(0,len(test_y)),"Prediction":test_y}).to_csv("log/submission_random.csv", index=False)
 
 
